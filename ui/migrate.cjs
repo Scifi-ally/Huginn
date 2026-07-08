@@ -1,0 +1,15 @@
+const fs = require('fs');
+let code = fs.readFileSync('src/App.tsx', 'utf8');
+code = code.replace(/from 'lucide-react'/g, "from '@phosphor-icons/react'");
+code = code.replace(/MonitorDot/g, 'Lightning');
+code = code.replace(/FolderSearch/g, 'MagnifyingGlass');
+code = code.replace(/AlertCircle/g, 'WarningCircle');
+code = code.replace(/Loader2/g, 'SpinnerGap');
+code = code.replace(/Send/g, 'PaperPlaneRight');
+code = code.replace(/ChevronLeft/g, 'CaretLeft');
+code = code.replace(/ChevronRight/g, 'CaretRight');
+code = code.replace(/HardDrive/g, 'HardDrives');
+code = code.replace(/Network/g, 'TreeStructure');
+code = code.replace(/TerminalSquare/g, 'TerminalWindow');
+code = code.replace(/strokeWidth=\{[0-9.]+\}/g, 'weight="duotone"');
+fs.writeFileSync('src/App.tsx', code);

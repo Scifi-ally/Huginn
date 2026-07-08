@@ -1,0 +1,40 @@
+{
+  "name": "huginn",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "warden": "./bin/warden.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "db:up": "docker compose up -d",
+    "db:push": "drizzle-kit push",
+    "dev:backend": "set WARDEN_OFFLINE_BYPASS=true&& tsx --watch src/index.ts",
+    "dev:frontend": "npm --prefix ui run dev",
+    "start": "npm run db:up && concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.1.0",
+    "@types/pg": "^8.20.0",
+    "concurrently": "^10.0.3",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "bullmq": "^5.79.2",
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^5.2.1",
+    "pg": "^8.22.0",
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
+  }
+}

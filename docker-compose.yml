@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: warden-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: warden
+    ports:
+      - "5433:5432"
+    volumes:
+      - warden-db-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: warden-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - warden-redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  warden-db-data:
+  warden-redis-data:
