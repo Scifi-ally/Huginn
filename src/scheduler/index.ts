@@ -12,10 +12,16 @@ import util from 'util';
 const execAsync = util.promisify(exec);
 const REDIS_HOST = process.env.REDIS_HOST || '127.0.0.1';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6380', 10);
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
+
+if (process.env.NODE_ENV === 'production' && !REDIS_PASSWORD) {
+  throw new Error('REDIS_PASSWORD must be provided in production environments.');
+}
 
 const connection = {
   host: REDIS_HOST,
   port: REDIS_PORT,
+  password: REDIS_PASSWORD,
   maxRetriesPerRequest: null,
 };
 
@@ -27,14 +33,18 @@ export const taskQueue = new Queue('warden-tasks', { connection });
  */
 export async function scheduleTasks() {
   // 1. Get ready tasks
-  const readyTasks = await db.select().from(tasks).where(eq(tasks.status, 'ready')).orderBy(asc(tasks.estimatedTier));
-  
+  const readyTasks = await db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.status, 'ready'))
+    .orderBy(asc(tasks.estimatedTier));
+
   if (readyTasks.length === 0) return;
 
   const currentModel = modelManager.getLoadedModel();
 
   for (const task of readyTasks) {
-    let targetTier = task.estimatedTier;
+    const targetTier = task.estimatedTier;
 
     // Attempt to batch by current model if possible
     const modelForTier = modelManager.getModelForTier(targetTier);
@@ -44,7 +54,10 @@ export async function scheduleTasks() {
     }
 
     // Dispatch to BullMQ
-    await db.update(tasks).set({ status: 'queued' }).where(eq(tasks.id, task.id));
+    await db
+      .update(tasks)
+      .set({ status: 'queued', updatedAt: new Date() })
+      .where(eq(tasks.id, task.id));
     await taskQueue.add('execute-task', { taskId: task.id, targetTier });
     console.log(`[Scheduler] Queued task ${task.id} for Tier ${targetTier}`);
     broadcastEvent('task_queued', { id: task.id, tier: targetTier });
@@ -52,10 +65,20 @@ export async function scheduleTasks() {
 }
 
 // Start polling loop
+let isScheduling = false;
 let interval: NodeJS.Timeout;
+
 export function startScheduler() {
   console.log('[Scheduler] ON');
-  interval = setInterval(scheduleTasks, 5000);
+  interval = setInterval(async () => {
+    if (isScheduling) return;
+    isScheduling = true;
+    try {
+      await scheduleTasks();
+    } finally {
+      isScheduling = false;
+    }
+  }, 5000);
 }
 
 export function stopScheduler() {

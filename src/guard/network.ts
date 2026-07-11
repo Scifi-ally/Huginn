@@ -8,20 +8,28 @@ import https from 'https';
  */
 export async function verifyOfflineGuard(): Promise<boolean> {
   if (process.env.WARDEN_OFFLINE_BYPASS === 'true') {
+    if (process.env.NODE_ENV === 'production') {
+      console.error(
+        '[Network Guard] 🚨 WARDEN_OFFLINE_BYPASS is strictly forbidden in production mode. Refusing to boot. 🚨',
+      );
+      return false;
+    }
     console.log('[Network Guard] BYPASSED via WARDEN_OFFLINE_BYPASS. Assuming offline.');
     return true;
   }
-  
+
   console.log('[Network Guard] Verifying offline guarantee...');
-  
+
   // We ping a reliable public IP/DNS to check for internet access
   const checkUrl = 'http://1.1.1.1';
-  
+
   return new Promise((resolve, reject) => {
     const req = http.get(checkUrl, { timeout: 3000 }, (res) => {
       // If we get any response, we are online. Guard failed.
       console.error('[Network Guard] 🚨 NETWORK BREACH DETECTED 🚨');
-      console.error('[Network Guard] External network request succeeded. Offline guarantee is NOT enforced.');
+      console.error(
+        '[Network Guard] External network request succeeded. Offline guarantee is NOT enforced.',
+      );
       resolve(false);
     });
 

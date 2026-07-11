@@ -5,26 +5,23 @@ import tailwindcss from '@tailwindcss/vite';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-    react()
-  ],
+  plugins: [tailwindcss(), react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   server: {
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
       },
       '/ws': {
         target: 'ws://localhost:3000',
-        ws: true
-      }
-    }
-  }
+        ws: true,
+      },
+    },
+  },
 });

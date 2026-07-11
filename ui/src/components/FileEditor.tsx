@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, FloppyDisk, SpinnerGap, Check, DownloadSimple, Trash, Copy, ArrowCounterClockwise, Play } from '@phosphor-icons/react';
+import {
+  X,
+  FloppyDisk,
+  SpinnerGap,
+  Check,
+  DownloadSimple,
+  Trash,
+  Copy,
+  ArrowCounterClockwise,
+  Play,
+} from '@phosphor-icons/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -24,14 +34,49 @@ interface FileEditorProps {
 }
 
 const LANG_MAP: Record<string, string> = {
-  ts: 'TypeScript', tsx: 'TypeScript JSX', js: 'JavaScript', jsx: 'JavaScript JSX',
-  py: 'Python', java: 'Java', rs: 'Rust', go: 'Go', rb: 'Ruby', cpp: 'C++', c: 'C',
-  h: 'C Header', cs: 'C#', php: 'PHP', swift: 'Swift', kt: 'Kotlin',
-  html: 'HTML', css: 'CSS', scss: 'SCSS', json: 'JSON', xml: 'XML', yaml: 'YAML', yml: 'YAML',
-  md: 'Markdown', txt: 'Plain Text', sh: 'Shell', bash: 'Bash', ps1: 'PowerShell',
-  sql: 'SQL', graphql: 'GraphQL', toml: 'TOML', ini: 'INI', cfg: 'Config',
-  dockerfile: 'Dockerfile', gitignore: 'Git Ignore', env: 'Environment',
-  svg: 'SVG', png: 'PNG Image', jpg: 'JPEG Image', jpeg: 'JPEG Image', gif: 'GIF Image', webp: 'WebP Image', ico: 'Icon',
+  ts: 'TypeScript',
+  tsx: 'TypeScript JSX',
+  js: 'JavaScript',
+  jsx: 'JavaScript JSX',
+  py: 'Python',
+  java: 'Java',
+  rs: 'Rust',
+  go: 'Go',
+  rb: 'Ruby',
+  cpp: 'C++',
+  c: 'C',
+  h: 'C Header',
+  cs: 'C#',
+  php: 'PHP',
+  swift: 'Swift',
+  kt: 'Kotlin',
+  html: 'HTML',
+  css: 'CSS',
+  scss: 'SCSS',
+  json: 'JSON',
+  xml: 'XML',
+  yaml: 'YAML',
+  yml: 'YAML',
+  md: 'Markdown',
+  txt: 'Plain Text',
+  sh: 'Shell',
+  bash: 'Bash',
+  ps1: 'PowerShell',
+  sql: 'SQL',
+  graphql: 'GraphQL',
+  toml: 'TOML',
+  ini: 'INI',
+  cfg: 'Config',
+  dockerfile: 'Dockerfile',
+  gitignore: 'Git Ignore',
+  env: 'Environment',
+  svg: 'SVG',
+  png: 'PNG Image',
+  jpg: 'JPEG Image',
+  jpeg: 'JPEG Image',
+  gif: 'GIF Image',
+  webp: 'WebP Image',
+  ico: 'Icon',
 };
 
 function getLanguage(filePath: string): string {
@@ -77,7 +122,9 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
   }, []);
 
   const isImage = /\.(png|jpe?g|gif|svg|webp|ico)$/i.test(filePath);
-  const isBinary = /\.(pdf|zip|tar|gz|exe|dll|so|wasm|mp3|mp4|mov|avi|ttf|otf|woff2?)$/i.test(filePath);
+  const isBinary = /\.(pdf|zip|tar|gz|exe|dll|so|wasm|mp3|mp4|mov|avi|ttf|otf|woff2?)$/i.test(
+    filePath,
+  );
   const isHtml = /\.(html?|svg|md)$/i.test(filePath);
   const isMarkdown = /\.md$/i.test(filePath);
   const isWebProject = /\.(html?|tsx?|jsx?|css|json|js|ts)$/i.test(filePath);
@@ -97,15 +144,23 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
     setIsLoading(true);
     setError('');
     fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to read file');
+      .then(async (res) => {
+        if (res.status === 404) throw new Error(`File not found: ${filePath.split(/[\\/]/).pop()}`);
+        if (!res.ok) {
+          let errMsg = `Failed to read file (HTTP ${res.status})`;
+          try {
+            const data = await res.json();
+            if (data.error) errMsg = data.error;
+          } catch (e) {}
+          throw new Error(errMsg);
+        }
         return res.text();
       })
-      .then(text => {
+      .then((text) => {
         setContent(text);
         setOriginalContent(text);
       })
-      .catch(err => setError(err.message))
+      .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [filePath, isImage, isBinary]);
 
@@ -118,9 +173,16 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
       const res = await fetch(`/api/files/content?path=${encodeURIComponent(filePath)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'text/plain' },
-        body: content
+        body: content,
       });
-      if (!res.ok) throw new Error('Failed to save file');
+      if (!res.ok) {
+        let errMsg = `Failed to save file (HTTP ${res.status})`;
+        try {
+          const data = await res.json();
+          if (data.error) errMsg = data.error;
+        } catch (e) {}
+        throw new Error(errMsg);
+      }
       setOriginalContent(content);
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2500);
@@ -141,9 +203,11 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
       }
       if (e.key === 'Escape') {
         if (isDirty) {
-          if (window.confirm('You have unsaved changes. Close without saving?')) {
-            onClose();
-          }
+          (window as any)
+            .customConfirm('You have unsaved changes. Close without saving?')
+            .then((res: boolean) => {
+              if (res) onClose();
+            });
         } else {
           onClose();
         }
@@ -186,9 +250,11 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
 
   // Revert to original
   const handleRevert = () => {
-    if (window.confirm('Revert all changes to the last saved version?')) {
-      setContent(originalContent);
-    }
+    (window as any)
+      .customConfirm('Revert all changes to the last saved version?')
+      .then((res: boolean) => {
+        if (res) setContent(originalContent);
+      });
   };
 
   // Delete file
@@ -197,7 +263,7 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
       await fetch('/api/files', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPath: filePath })
+        body: JSON.stringify({ targetPath: filePath }),
       });
       onDelete?.();
       onClose();
@@ -209,9 +275,11 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
   // Close with unsaved changes guard
   const handleClose = () => {
     if (isDirty) {
-      if (window.confirm('You have unsaved changes. Close without saving?')) {
-        onClose();
-      }
+      (window as any)
+        .customConfirm('You have unsaved changes. Close without saving?')
+        .then((res: boolean) => {
+          if (res) onClose();
+        });
     } else {
       onClose();
     }
@@ -221,11 +289,13 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
   const lines = content.split('\n');
 
   return (
-    <div className="flex-1 flex flex-col w-full h-full bg-white dark:bg-black relative z-20 overflow-hidden" style={{ animation: 'fadeIn 0.15s ease-out' }}>
-
+    <div
+      className="flex-1 flex flex-col w-full h-full bg-white dark:bg-[#0A0A0A] relative z-20 overflow-hidden"
+      style={{ animation: 'fadeIn 0.15s ease-out' }}
+    >
       {/* ═══ Editor Breadcrumb & Toolbar ═══ */}
-      <div className="flex items-center justify-between px-6 h-10 border-b border-transparent dark:border-transparent bg-white dark:bg-black shrink-0 select-none">
-        <div className="flex items-center gap-2 text-[11px] font-mono text-[#71717A] dark:text-[#A1A1AA]">
+      <div className="flex items-center justify-between px-6 h-11 border-b border-zinc-200/60 dark:border-zinc-800/60 bg-white dark:bg-[#0A0A0A] shrink-0 select-none">
+        <div className="flex items-center gap-2 text-[12px] font-mono text-[#71717A] dark:text-[#A1A1AA]">
           <span className="text-[#A1A1AA] dark:text-[#71717A]">workspace</span>
           <span className="text-[#D4D4D8] dark:text-[#3F3F46]">/</span>
           <span className="text-[#111111] dark:text-[#E4E4E7] font-semibold">{fileName}</span>
@@ -241,16 +311,16 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
 
         <div className="flex items-center gap-1">
           {isHtml && (
-            <div className="flex items-center bg-black/5 dark:bg-[#27272A] p-0.5 rounded-lg mr-2">
+            <div className="flex items-center bg-black/5 dark:bg-[#1A1A1A] p-0.5 rounded-lg mr-2">
               <button
                 onClick={() => setViewMode('code')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${viewMode === 'code' ? 'bg-white dark:bg-black text-[#111111] dark:text-[#E4E4E7] shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${viewMode === 'code' ? 'bg-white dark:bg-[#0A0A0A] text-[#111111] dark:text-[#E4E4E7] shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
               >
                 Code
               </button>
               <button
                 onClick={() => setViewMode('preview')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${viewMode === 'preview' ? 'bg-white dark:bg-black text-[#111111] dark:text-[#E4E4E7] shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${viewMode === 'preview' ? 'bg-white dark:bg-[#0A0A0A] text-[#111111] dark:text-[#E4E4E7] shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
               >
                 Preview
               </button>
@@ -258,25 +328,25 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
           )}
 
           {isHtml && viewMode === 'preview' && (
-            <div className="flex items-center bg-black/5 dark:bg-[#27272A] p-0.5 rounded-lg mr-2">
+            <div className="flex items-center bg-black/5 dark:bg-[#1A1A1A] p-0.5 rounded-lg mr-2">
               <button
                 onClick={() => setScreenSize('desktop')}
-                className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${screenSize === 'desktop' ? 'bg-white dark:bg-black text-[#111111] dark:text-[#E4E4E7] font-bold shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
-                title="Desktop (100%)"
+                className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${screenSize === 'desktop' ? 'bg-white dark:bg-[#0A0A0A] text-[#111111] dark:text-[#E4E4E7] font-bold shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
+                title="Desktop View (Full Width)"
               >
                 Desktop
               </button>
               <button
                 onClick={() => setScreenSize('tablet')}
-                className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${screenSize === 'tablet' ? 'bg-white dark:bg-black text-[#111111] dark:text-[#E4E4E7] font-bold shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
-                title="Tablet (768px)"
+                className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${screenSize === 'tablet' ? 'bg-white dark:bg-[#0A0A0A] text-[#111111] dark:text-[#E4E4E7] font-bold shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
+                title="Tablet View (768px)"
               >
                 Tablet
               </button>
               <button
                 onClick={() => setScreenSize('mobile')}
-                className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${screenSize === 'mobile' ? 'bg-white dark:bg-black text-[#111111] dark:text-[#E4E4E7] font-bold shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
-                title="Mobile (375px)"
+                className={`px-2 py-1 rounded-md text-[10px] font-mono transition-all ${screenSize === 'mobile' ? 'bg-white dark:bg-[#0A0A0A] text-[#111111] dark:text-[#E4E4E7] font-bold shadow-sm' : 'text-[#71717A] dark:text-[#A1A1AA] hover:text-[#111111] dark:hover:text-white'}`}
+                title="Mobile View (375px)"
               >
                 Mobile
               </button>
@@ -289,11 +359,14 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
                 setIsRunning(true);
                 setRunMessage('Starting dev server...');
                 try {
-                  const dir = filePath.substring(0, filePath.lastIndexOf(/\\|\//.exec(filePath)?.[0] || ''));
+                  const dir = filePath.substring(
+                    0,
+                    filePath.lastIndexOf(/\\|\//.exec(filePath)?.[0] || ''),
+                  );
                   const res = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dir, command: 'npm run dev' })
+                    body: JSON.stringify({ dir, scriptName: 'dev' }),
                   });
                   const data = await res.json();
                   setRunMessage(data.message || 'Running!');
@@ -307,12 +380,20 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
               disabled={isRunning}
               className="flex items-center gap-1.5 bg-[#10B981] text-white px-3 py-1 rounded-md text-[11px] font-mono font-bold hover:bg-[#059669] transition-all shadow-sm mr-2"
             >
-              {isRunning ? <SpinnerGap size={12} className="animate-spin" /> : <span className="flex items-center gap-1"><Play size={12} weight="fill" /> Run Project</span>}
+              {isRunning ? (
+                <SpinnerGap size={12} className="animate-spin" />
+              ) : (
+                <span className="flex items-center gap-1">
+                  <Play size={12} weight="fill" /> Run Project
+                </span>
+              )}
             </button>
           )}
 
           {runMessage && (
-            <span className="text-[11px] font-mono text-[#10B981] font-bold mr-2 animate-pulse">{runMessage}</span>
+            <span className="text-[11px] font-mono text-[#10B981] font-bold mr-2 animate-pulse">
+              {runMessage}
+            </span>
           )}
 
           {!isImage && !isBinary && isDirty && (
@@ -326,7 +407,7 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
           )}
           {!isBinary && (
             <button
-              onClick={() => handleFormat()}
+              onClick={handleCopy}
               className="p-1.5 text-[#71717A] hover:text-[#111111] hover:bg-black/5 rounded transition-colors"
             >
               <Copy size={14} />
@@ -342,23 +423,23 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
           {/* Delete with confirmation */}
           <AnimatePresence mode="wait">
             {showDeleteConfirm ? (
-              <motion.div 
+              <motion.div
                 key="confirm"
                 initial={{ opacity: 0, scale: 0.8, x: 10 }}
                 animate={{ opacity: 1, scale: 1, x: 0 }}
                 exit={{ opacity: 0, scale: 0.8, x: 10 }}
-                transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                transition={{ type: 'spring', stiffness: 450, damping: 25 }}
                 className="flex items-center gap-1 ml-1"
               >
-                <button 
-                  onClick={handleDelete} 
+                <button
+                  onClick={handleDelete}
                   title="Confirm Delete"
                   className="text-[#10B981] hover:bg-[#10B981]/15 p-1.5 rounded-lg transition-colors"
                 >
                   <Check size={15} weight="bold" />
                 </button>
-                <button 
-                  onClick={() => setShowDeleteConfirm(false)} 
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
                   title="Cancel"
                   className="text-[#EF4444] hover:bg-[#EF4444]/15 p-1.5 rounded-lg transition-colors"
                 >
@@ -385,9 +466,13 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
             <button
               onClick={handleSave}
               disabled={isLoading || isSaving || !isDirty}
-              className="flex items-center gap-2 bg-[#111111] dark:bg-white text-white dark:text-[#111111] px-3.5 py-1.5 rounded-md text-[11px] font-mono font-bold hover:bg-[#27272A] dark:hover:bg-[#E4E4E7] transition-colors disabled:bg-[#E4E4E7] disabled:text-[#A1A1AA] disabled:dark:bg-[#27272A] disabled:dark:text-[#71717A] disabled:cursor-not-allowed"
+              className="flex items-center gap-2 bg-[#111111] dark:bg-white text-white dark:text-[#111111] px-3.5 py-1.5 rounded-md text-[11px] font-mono font-bold hover:bg-[#27272A] dark:hover:bg-[#E4E4E7] transition-colors disabled:bg-[#E4E4E7] disabled:text-[#A1A1AA] disabled:dark:bg-[#1A1A1A] disabled:dark:text-[#71717A] disabled:cursor-not-allowed"
             >
-              {isSaving ? <SpinnerGap size={12} className="animate-spin" /> : <FloppyDisk size={12} weight="duotone" />}
+              {isSaving ? (
+                <SpinnerGap size={12} className="animate-spin" />
+              ) : (
+                <FloppyDisk size={12} weight="duotone" />
+              )}
               Save
             </button>
           )}
@@ -395,11 +480,13 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
       </div>
 
       {/* ═══ Editor Body ═══ */}
-      <div className="flex-1 overflow-hidden relative bg-white dark:bg-black">
+      <div className="flex-1 overflow-hidden relative bg-white dark:bg-[#0A0A0A]">
         {error && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-red-50 text-red-600 px-4 py-2 rounded-md text-[11px] font-mono z-10 border border-red-200 shadow-sm flex items-center gap-2">
             {error}
-            <button onClick={() => setError('')} className="hover:text-red-800"><X size={12} /></button>
+            <button onClick={() => setError('')} className="hover:text-red-800">
+              <X size={12} />
+            </button>
           </div>
         )}
 
@@ -410,70 +497,141 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
         ) : isBinary ? (
           <div className="flex flex-col items-center justify-center h-full text-[#A1A1AA] gap-3">
             <p className="font-mono text-[13px]">Binary file — cannot be edited in the browser.</p>
-            <button onClick={handleDownload} className="flex items-center gap-2 bg-[#111111] text-white px-4 py-2 rounded-md text-[12px] font-mono font-bold hover:bg-[#27272A] transition-colors">
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-2 bg-[#111111] text-white px-4 py-2 rounded-md text-[12px] font-mono font-bold hover:bg-[#27272A] transition-colors"
+            >
               <DownloadSimple size={14} /> Download Instead
             </button>
           </div>
         ) : isImage ? (
-          <div className="flex items-center justify-center h-full bg-white dark:bg-black p-8 overflow-auto">
+          <div className="flex items-center justify-center h-full bg-white dark:bg-[#0A0A0A] p-8 overflow-auto">
             <img
               src={`/api/files/content?path=${encodeURIComponent(filePath)}&t=${Date.now()}`}
               alt={filePath}
-              className="max-w-full max-h-full object-contain shadow-sm border border-transparent dark:border-transparent rounded-sm bg-white dark:bg-black"
+              className="max-w-full max-h-full object-contain shadow-sm border border-transparent dark:border-transparent rounded-sm bg-white dark:bg-[#0A0A0A]"
             />
           </div>
         ) : isHtml && viewMode === 'preview' ? (
           <AnimatePresence mode="wait">
-            <motion.div 
+            <motion.div
               key="preview"
               initial={{ opacity: 0, scale: 0.98, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: -10 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="flex items-center justify-center h-full bg-white dark:bg-black p-6 overflow-auto w-full"
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className="flex items-center justify-center h-full bg-white dark:bg-[#0A0A0A] p-6 overflow-auto w-full"
             >
-              <div className={`relative ${
-                screenSize === 'desktop' ? 'w-full h-full' :
-                screenSize === 'tablet' ? 'w-[768px] h-[95%] shadow-xl rounded-lg border border-transparent dark:border-transparent bg-white dark:bg-black overflow-hidden resize-x min-w-[320px] max-w-[100%]' :
-                'w-[375px] h-[95%] shadow-xl rounded-lg border border-transparent dark:border-transparent bg-white dark:bg-black overflow-hidden resize-x min-w-[320px] max-w-[100%]'
-              }`}>
+              <div
+                className={`relative ${
+                  screenSize === 'desktop'
+                    ? 'w-full h-full'
+                    : screenSize === 'tablet'
+                      ? 'w-[768px] h-[95%] shadow-xl rounded-lg border border-transparent dark:border-transparent bg-white dark:bg-[#0A0A0A] overflow-hidden resize-x min-w-[320px] max-w-[100%]'
+                      : 'w-[375px] h-[95%] shadow-xl rounded-lg border border-transparent dark:border-transparent bg-white dark:bg-[#0A0A0A] overflow-hidden resize-x min-w-[320px] max-w-[100%]'
+                }`}
+              >
                 {isMarkdown ? (
-                  <div className="w-full h-full bg-white dark:bg-black overflow-auto p-8 font-sans max-w-none text-left">
-                    <ReactMarkdown 
+                  <div className="w-full h-full bg-white dark:bg-[#0A0A0A] overflow-auto p-8 font-sans max-w-none text-left">
+                    <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        h1: ({node, ...props}) => <h1 className="text-[22px] font-bold text-[#18181B] dark:text-[#F4F4F5] mt-5 mb-3 tracking-tight" {...props} />,
-                        h2: ({node, ...props}) => <h2 className="text-[18px] font-bold text-[#18181B] dark:text-[#F4F4F5] mt-4 mb-2 tracking-tight" {...props} />,
-                        h3: ({node, ...props}) => <h3 className="text-[16px] font-semibold text-[#18181B] dark:text-[#F4F4F5] mt-3 mb-2" {...props} />,
-                        p: ({node, ...props}) => <p className="leading-[1.75] mb-3 text-[#3F3F46] dark:text-[#D4D4D8]" {...props} />,
-                        ul: ({node, ...props}) => <ul className="list-disc pl-5 mb-3 space-y-1.5 text-[#3F3F46] dark:text-[#D4D4D8]" {...props} />,
-                        ol: ({node, ...props}) => <ol className="list-decimal pl-5 mb-3 space-y-1.5 text-[#3F3F46] dark:text-[#D4D4D8]" {...props} />,
-                        li: ({node, ...props}) => <li className="leading-[1.7]" {...props} />,
-                        strong: ({node, ...props}) => <strong className="font-semibold text-[#18181B] dark:text-white" {...props} />,
-                        a: ({node, ...props}) => <a className="text-[#3B82F6] hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
-                        table: ({node, ...props}) => <div className="overflow-x-auto my-4"><table className="w-full text-left" {...props} /></div>,
-                        thead: ({node, ...props}) => <thead className="text-[#18181B] dark:text-[#F4F4F5]" {...props} />,
-                        tbody: ({node, ...props}) => <tbody className="text-[#3F3F46] dark:text-[#D4D4D8]" {...props} />,
-                        tr: ({node, ...props}) => <tr className="hover:bg-black/5 dark:hover:bg-[#111111] transition-colors" {...props} />,
-                        th: ({node, ...props}) => <th className="px-4 py-2 font-semibold text-sm" {...props} />,
-                        td: ({node, ...props}) => <td className="px-4 py-2 text-sm" {...props} />,
-                        code({node, inline, className, children, ...props}: any) {
+                        h1: ({ node, ...props }) => (
+                          <h1
+                            className="text-[22px] font-bold text-[#18181B] dark:text-[#F4F4F5] mt-5 mb-3 tracking-tight"
+                            {...props}
+                          />
+                        ),
+                        h2: ({ node, ...props }) => (
+                          <h2
+                            className="text-[18px] font-bold text-[#18181B] dark:text-[#F4F4F5] mt-4 mb-2 tracking-tight"
+                            {...props}
+                          />
+                        ),
+                        h3: ({ node, ...props }) => (
+                          <h3
+                            className="text-[16px] font-semibold text-[#18181B] dark:text-[#F4F4F5] mt-3 mb-2"
+                            {...props}
+                          />
+                        ),
+                        p: ({ node, ...props }) => (
+                          <p
+                            className="leading-[1.75] mb-3 text-[#3F3F46] dark:text-[#D4D4D8]"
+                            {...props}
+                          />
+                        ),
+                        ul: ({ node, ...props }) => (
+                          <ul
+                            className="list-disc pl-5 mb-3 space-y-1.5 text-[#3F3F46] dark:text-[#D4D4D8]"
+                            {...props}
+                          />
+                        ),
+                        ol: ({ node, ...props }) => (
+                          <ol
+                            className="list-decimal pl-5 mb-3 space-y-1.5 text-[#3F3F46] dark:text-[#D4D4D8]"
+                            {...props}
+                          />
+                        ),
+                        li: ({ node, ...props }) => <li className="leading-[1.7]" {...props} />,
+                        strong: ({ node, ...props }) => (
+                          <strong
+                            className="font-semibold text-[#18181B] dark:text-white"
+                            {...props}
+                          />
+                        ),
+                        a: ({ node, ...props }) => (
+                          <a
+                            className="text-[#3B82F6] hover:underline"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            {...props}
+                          />
+                        ),
+                        table: ({ node, ...props }) => (
+                          <div className="overflow-x-auto my-4">
+                            <table className="w-full text-left" {...props} />
+                          </div>
+                        ),
+                        thead: ({ node, ...props }) => (
+                          <thead className="text-[#18181B] dark:text-[#F4F4F5]" {...props} />
+                        ),
+                        tbody: ({ node, ...props }) => (
+                          <tbody className="text-[#3F3F46] dark:text-[#D4D4D8]" {...props} />
+                        ),
+                        tr: ({ node, ...props }) => (
+                          <tr
+                            className="hover:bg-black/5 dark:hover:bg-[#111111] transition-colors"
+                            {...props}
+                          />
+                        ),
+                        th: ({ node, ...props }) => (
+                          <th className="px-4 py-2 font-semibold text-sm" {...props} />
+                        ),
+                        td: ({ node, ...props }) => <td className="px-4 py-2 text-sm" {...props} />,
+                        code({ node, inline, className, children, ...props }: any) {
                           const match = /language-(\w+)/.exec(className || '');
                           return !inline && match ? (
-                            <div className="my-3 bg-white dark:bg-black border border-transparent dark:border-transparent rounded-md overflow-hidden">
-                              <div className="bg-white dark:bg-black px-3 py-1.5 border-b border-transparent dark:border-transparent text-[11px] font-bold text-[#64748B] dark:text-[#A1A1AA] uppercase tracking-wider">
+                            <div className="my-3 bg-white dark:bg-[#0A0A0A] border border-transparent dark:border-transparent rounded-md overflow-hidden">
+                              <div className="bg-white dark:bg-[#0A0A0A] px-3 py-1.5 border-b border-transparent dark:border-transparent text-[11px] font-bold text-[#64748B] dark:text-[#A1A1AA] uppercase tracking-wider">
                                 {match[1]}
                               </div>
                               <div className="p-3 overflow-x-auto">
-                                <pre className="text-[#0F172A] dark:text-[#E4E4E7] whitespace-pre-wrap font-mono text-[13px] leading-relaxed"><code {...props} className={className}>{children}</code></pre>
+                                <pre className="text-[#0F172A] dark:text-[#E4E4E7] whitespace-pre-wrap font-mono text-[13px] leading-relaxed">
+                                  <code {...props} className={className}>
+                                    {children}
+                                  </code>
+                                </pre>
                               </div>
                             </div>
                           ) : (
-                            <code className="bg-black/5 dark:bg-[#27272A] text-[#18181B] dark:text-[#F4F4F5] px-1.5 py-0.5 rounded text-[13px] font-mono font-medium" {...props}>
+                            <code
+                              className="bg-black/5 dark:bg-[#1A1A1A] text-[#18181B] dark:text-[#F4F4F5] px-1.5 py-0.5 rounded text-[13px] font-mono font-medium"
+                              {...props}
+                            >
                               {children}
                             </code>
                           );
-                        }
+                        },
                       }}
                     >
                       {content}
@@ -483,7 +641,7 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
                   <iframe
                     srcDoc={content}
                     title="HTML Preview"
-                    className="w-full h-full border-none bg-white dark:bg-black"
+                    className="w-full h-full border-none bg-white dark:bg-[#0A0A0A]"
                     sandbox="allow-scripts allow-same-origin"
                   />
                 )}
@@ -492,18 +650,18 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
           </AnimatePresence>
         ) : (
           <AnimatePresence mode="wait">
-            <motion.div 
+            <motion.div
               key="code"
               initial={{ opacity: 0, scale: 0.98, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.98, y: -10 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="flex h-full overflow-hidden w-full"
             >
               {/* Line numbers */}
-              <div 
+              <div
                 ref={lineNumbersRef}
-                className="shrink-0 pt-4 pb-4 pl-4 pr-2 text-right select-none bg-white dark:bg-black border-r border-transparent dark:border-transparent overflow-hidden"
+                className="shrink-0 pt-4 pb-4 pl-4 pr-2 text-right select-none bg-white dark:bg-[#0A0A0A] border-r border-transparent dark:border-transparent overflow-hidden"
               >
                 {lines.map((_, i) => (
                   <div key={i} className="font-mono text-[12px] leading-[22px] text-[#D4D4D8]">
@@ -511,17 +669,21 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
                   </div>
                 ))}
               </div>
-              <div className="flex-1 bg-transparent overflow-auto relative" onScroll={(e) => {
-                if (lineNumbersRef.current) {
-                  lineNumbersRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
-                }
-              }}>
+              <div
+                className="flex-1 bg-transparent overflow-auto relative"
+                onScroll={(e) => {
+                  if (lineNumbersRef.current) {
+                    lineNumbersRef.current.scrollTop = (e.target as HTMLDivElement).scrollTop;
+                  }
+                }}
+              >
                 <Editor
                   value={content}
-                  onValueChange={code => setContent(code)}
-                  highlight={code => {
+                  onValueChange={(code: string) => setContent(code)}
+                  highlight={(code: string) => {
                     const ext = filePath.split('.').pop()?.toLowerCase() || '';
-                    const lang = Prism.languages[ext] || Prism.languages.javascript || Prism.languages.text;
+                    const lang =
+                      Prism.languages[ext] || Prism.languages.javascript || Prism.languages.text;
                     try {
                       return Prism.highlight(code, lang, ext);
                     } catch (e) {
@@ -545,7 +707,7 @@ export default function FileEditor({ filePath, onClose, onDelete }: FileEditorPr
       </div>
 
       {/* ═══ Status Bar ═══ */}
-      <div className="flex items-center justify-between px-5 py-1.5 border-t border-transparent dark:border-transparent bg-white dark:bg-black shrink-0">
+      <div className="flex items-center justify-between px-5 py-1.5 border-t border-transparent dark:border-transparent bg-white dark:bg-[#0A0A0A] shrink-0">
         <div className="flex items-center gap-4">
           <span className="font-mono text-[10px] text-[#A1A1AA]">{language}</span>
           {!isImage && !isBinary && (

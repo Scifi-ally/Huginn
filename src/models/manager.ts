@@ -8,33 +8,51 @@ export class ModelManager {
   private currentlyLoadedModel: string | null = null;
   private readonly tiers: Record<number, string> = {
     1: 'qwen2.5-coder:1.5b', // Tier 1 (small)
-    2: 'qwen2.5-coder:7b',   // Tier 2 (medium)
-    3: 'qwen2.5-coder:14b',  // Tier 3 (large)
+    2: 'qwen2.5-coder:7b', // Tier 2 (medium)
+    3: 'qwen2.5-coder:14b', // Tier 3 (large)
   };
 
   private readonly specialists: Record<string, string> = {
-    'ui': 'qwen2.5-coder:7b',
-    'frontend': 'qwen2.5-coder:7b',
-    'terminal': 'qwen2.5-coder:7b',
-    'automation': 'qwen2.5-coder:7b',
-    'coding': 'qwen2.5-coder:14b',
-    'reasoning': 'qwen2.5:7b',
-    'default': 'qwen2.5-coder:7b'
+    ui: 'qwen2.5-coder:7b',
+    frontend: 'qwen2.5-coder:7b',
+    terminal: 'qwen2.5-coder:7b',
+    automation: 'qwen2.5-coder:7b',
+    coding: 'qwen2.5-coder:14b',
+    reasoning: 'qwen2.5:7b',
+    default: 'qwen2.5-coder:7b',
   };
 
   constructor() {}
 
   public getModelForTask(taskDescription: string): string {
-    const lower = (taskDescription || '').toLowerCase();
-    if (lower.includes('ui') || lower.includes('frontend') || lower.includes('react') || lower.includes('web') || lower.includes('css') || lower.includes('html')) {
+    const text = (taskDescription || '').trim();
+    if (!text) return this.specialists['coding'] || 'qwen2.5-coder:7b';
+
+    // UI & Frontend
+    if (/\b(ui|frontend|react|web|css|html|tailwind|jsx|tsx|components?)\b/i.test(text)) {
       return this.specialists['ui'] || 'qwen2.5-coder:7b';
     }
-    if (lower.includes('terminal') || lower.includes('command') || lower.includes('shell') || lower.includes('bash') || lower.includes('powershell') || lower.includes('script') || lower.includes('devops')) {
+
+    // Terminal & DevOps commands
+    if (
+      /\b(terminal|bash|powershell|shell|zsh|devops|docker|kubernetes|cron|systemd)\b/i.test(
+        text,
+      ) ||
+      /\b(run|execute)\s+(command|script|pipeline)\b/i.test(text)
+    ) {
       return this.specialists['terminal'] || 'qwen2.5-coder:7b';
     }
-    if (lower.includes('reason') || lower.includes('why') || lower.includes('what') || lower.includes('how') || lower.includes('explain') || lower.includes('answer')) {
+
+    // Reasoning & Conceptual Q&A
+    if (
+      /\b(why|what|how|explain|reason|answer|describe|define|difference between|summarize)\b/i.test(
+        text,
+      ) &&
+      !/\b(code|file|function|class|component|fix|build|create|write|implement)\b/i.test(text)
+    ) {
       return this.specialists['reasoning'] || 'qwen2.5:7b';
     }
+
     return this.specialists['coding'] || 'qwen2.5-coder:7b';
   }
 
@@ -63,11 +81,11 @@ export class ModelManager {
 
   public async ensureLoaded(modelId: string): Promise<void> {
     if (this.currentlyLoadedModel === modelId) {
-      return; 
+      return;
     }
 
     console.log(`[ModelManager] Swapping models: ${this.currentlyLoadedModel} -> ${modelId}`);
-    
+
     if (this.currentlyLoadedModel) {
       broadcastEvent('model_unloading', { model: this.currentlyLoadedModel });
       await this.unloadModel(this.currentlyLoadedModel);
@@ -77,16 +95,17 @@ export class ModelManager {
     try {
       await this.loadModel(modelId);
     } catch (err: any) {
-      const errMsg = err.cause?.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED')
-        ? `Cannot connect to Ollama at ${OLLAMA_URL}. Is Ollama running?`
-        : `Failed to load model ${modelId}: ${err.message}`;
+      const errMsg =
+        err.cause?.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED')
+          ? `Cannot connect to Ollama at ${OLLAMA_URL}. Is Ollama running?`
+          : `Failed to load model ${modelId}: ${err.message}`;
       broadcastEvent('model_error', { message: errMsg });
       throw err;
     }
-    
+
     this.currentlyLoadedModel = modelId;
     broadcastEvent('model_loaded', { model: modelId });
-    
+
     console.log(`[ModelManager] Successfully loaded model: ${modelId}`);
   }
 
@@ -111,21 +130,26 @@ export class ModelManager {
         body: JSON.stringify({ model: modelId, prompt: '', keep_alive: '1h' }),
       });
     } catch (err: any) {
-      const errMsg = err.cause?.code === 'ECONNREFUSED'
-        ? `Cannot connect to Ollama at ${OLLAMA_URL}. Is Ollama running?`
-        : `Ollama connection failed: ${err.message}`;
+      const errMsg =
+        err.cause?.code === 'ECONNREFUSED'
+          ? `Cannot connect to Ollama at ${OLLAMA_URL}. Is Ollama running?`
+          : `Ollama connection failed: ${err.message}`;
       console.error(`[ModelManager] ${errMsg}`);
       broadcastEvent('model_error', { message: errMsg });
-      throw new Error(errMsg);
+      throw new Error(errMsg, { cause: err });
     }
 
     try {
       // Ollama returns 404 with error message if model is not found
       if (res.status === 404) {
         console.log(`[ModelManager] Model ${modelId} not found locally. Initiating download...`);
-        broadcastEvent('model_download_progress', { model: modelId, percent: 0, status: `Model ${modelId} not found locally. Starting download...` });
+        broadcastEvent('model_download_progress', {
+          model: modelId,
+          percent: 0,
+          status: `Model ${modelId} not found locally. Starting download...`,
+        });
         await this.pullModel(modelId);
-        
+
         // Try loading again after pull
         const retryRes = await fetch(`${OLLAMA_URL}/api/generate`, {
           method: 'POST',
@@ -147,39 +171,54 @@ export class ModelManager {
   private async pullModel(modelId: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const url = new URL(`${OLLAMA_URL}/api/pull`);
-      const req = (url.protocol === 'https:' ? https : http).request(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      }, (res) => {
-        if (res.statusCode !== 200) {
-          reject(new Error(`Failed to pull model: HTTP ${res.statusCode}`));
-          return;
-        }
-
-        res.on('data', (chunk) => {
-          const lines = chunk.toString().split('\n').filter((l: string) => l.trim() !== '');
-          for (const line of lines) {
-            try {
-              const data = JSON.parse(line);
-              if (data.total && data.completed) {
-                const percent = Math.round((data.completed / data.total) * 100);
-                broadcastEvent('model_download_progress', { model: modelId, percent, status: data.status });
-              } else {
-                broadcastEvent('model_download_progress', { model: modelId, percent: 0, status: data.status });
-              }
-              if (data.status === 'success') {
-                resolve();
-              }
-            } catch (e) {
-              // Ignore parse errors for partial chunks
-            }
+      const req = (url.protocol === 'https:' ? https : http).request(
+        url,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        },
+        (res) => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`Failed to pull model: HTTP ${res.statusCode}`));
+            return;
           }
-        });
 
-        res.on('end', () => {
-          resolve();
-        });
-      });
+          res.on('data', (chunk) => {
+            const lines = chunk
+              .toString()
+              .split('\n')
+              .filter((l: string) => l.trim() !== '');
+            for (const line of lines) {
+              try {
+                const data = JSON.parse(line);
+                if (data.total && data.completed) {
+                  const percent = Math.round((data.completed / data.total) * 100);
+                  broadcastEvent('model_download_progress', {
+                    model: modelId,
+                    percent,
+                    status: data.status,
+                  });
+                } else {
+                  broadcastEvent('model_download_progress', {
+                    model: modelId,
+                    percent: 0,
+                    status: data.status,
+                  });
+                }
+                if (data.status === 'success') {
+                  resolve();
+                }
+              } catch (e) {
+                // Ignore parse errors for partial chunks
+              }
+            }
+          });
+
+          res.on('end', () => {
+            resolve();
+          });
+        },
+      );
 
       req.on('error', (err) => {
         reject(err);

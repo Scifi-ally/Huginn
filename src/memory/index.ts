@@ -14,7 +14,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: EMBED_MODEL, prompt: text }),
     });
-    const data = await res.json() as { embedding?: number[], error?: string };
+    const data = (await res.json()) as { embedding?: number[]; error?: string };
     if (data.error) {
       console.error('[Memory] Ollama embedding error:', data.error);
       return [];
@@ -48,20 +48,27 @@ export async function searchMemory(query: string, limit = 3): Promise<any[]> {
 
   // Cosine distance similarity using pgvector
   const similarityQuery = sql<number>`1 - (${memoryEmbeddings.embedding} <=> ${JSON.stringify(queryEmbedding)})`;
-  
-  const results = await db.select({
-    taskId: memoryEmbeddings.taskId,
-    summary: memoryEmbeddings.summary,
-    similarity: similarityQuery,
-  })
-  .from(memoryEmbeddings)
-  .orderBy(sql`${memoryEmbeddings.embedding} <=> ${JSON.stringify(queryEmbedding)}`)
-  .limit(limit);
+
+  const results = await db
+    .select({
+      taskId: memoryEmbeddings.taskId,
+      summary: memoryEmbeddings.summary,
+      similarity: similarityQuery,
+    })
+    .from(memoryEmbeddings)
+    .orderBy(sql`${memoryEmbeddings.embedding} <=> ${JSON.stringify(queryEmbedding)}`)
+    .limit(limit);
 
   return results;
 }
 
-export async function writeTaskDoc(taskId: string, targetRepo: string, summary: string, diff: string, result: string) {
+export async function writeTaskDoc(
+  taskId: string,
+  targetRepo: string,
+  summary: string,
+  diff: string,
+  result: string,
+) {
   const logDir = path.join(targetRepo, 'warden-log');
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
@@ -69,7 +76,7 @@ export async function writeTaskDoc(taskId: string, targetRepo: string, summary: 
 
   const docPath = path.join(logDir, `task-${taskId}.md`);
   const content = `# Task: ${taskId}\n\n## Summary\n${summary}\n\n## Result\n${result}\n\n## Diff\n\`\`\`diff\n${diff}\n\`\`\`\n`;
-  
+
   fs.writeFileSync(docPath, content, 'utf-8');
   console.log(`[Docs] Wrote task documentation to ${docPath}`);
 }

@@ -6,8 +6,14 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const databaseUrl = process.env.DATABASE_URL;
+
+if (process.env.NODE_ENV === 'production' && !databaseUrl) {
+  throw new Error('DATABASE_URL must be provided in production environments.');
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5433/warden',
+  connectionString: databaseUrl || 'postgres://postgres:postgres@localhost:5433/warden',
 });
 
 export const db = drizzle(pool, { schema });
